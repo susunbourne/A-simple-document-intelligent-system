@@ -6,7 +6,7 @@ class BankStatement(Base):
     __tablename__ = "bank_statements"
 
     id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String, unique=True, nullable=False)
+    filename = Column(String, unique=False, nullable=False)
     raw_text = Column(Text, nullable=False)
 
 

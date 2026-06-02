@@ -5,4 +5,4 @@ For installation:
 pip install -r requirement
 and
 if you have a NVIDIA GPU, please also 
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128

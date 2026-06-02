@@ -6,7 +6,7 @@ from src.db.database import Base
 class AthleteContract(Base):
     __tablename__ = "athlete_contracts"
     contract_id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String, unique=True, nullable=False)
+    filename = Column(String, unique=False, nullable=False)
     raw_text = Column(Text, nullable=False)
     contract_name = Column(String, unique=False)
     party_a = Column(String, nullable=False)

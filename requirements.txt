@@ -6,3 +6,5 @@ openai
 docling
 python-multipart
 pydantic-settings
+streamlit
+httpx
