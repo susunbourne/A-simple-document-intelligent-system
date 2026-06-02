@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class StatementExtraction(BaseModel):
@@ -7,13 +7,24 @@ class StatementExtraction(BaseModel):
     amount: Optional[float] = None
     transaction_date: Optional[str] = None
 
+class StatementExtractionList(BaseModel):
+    statements: list[StatementExtraction]
+
+
 class StatementResponse(BaseModel):
     id: int
     filename: str
-    extraction: StatementExtraction
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    transaction_date: Optional[str] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
-        
+class StatementResponseList(BaseModel):
+    statements: list[StatementResponse]
+
+
+
+
+

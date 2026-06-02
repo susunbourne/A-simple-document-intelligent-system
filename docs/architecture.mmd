@@ -1,0 +1,47 @@
+flowchart LR
+  %% Combined framework diagram: Ingest -> Router -> Agents -> RAG -> LLM -> Verify -> Persist + Infra
+  subgraph API_Ingest [API / Ingest]
+    A[User Upload API\n`/statements/upload`]\nA --> Ingest[Ingest Service\n(file validation, metadata)]
+  end
+
+  subgraph RouterBlock [Router / Agent Selection]
+    Ingest --> Router{Router / Classifier}\n    Router -->|bank_statement| Agent_Bank[Agent: BankStatement]\n    Router -->|contract| Agent_Contract[Agent: Contract]\n    Router -->|other| Agent_Generic[Agent: Generic]
+  end
+
+  subgraph Agent_Workflow [Per-Agent Workflow]
+    Agent_Bank --> Preparse[Deterministic Pre-parsers\n(regex date/amount/etc.)]
+    Agent_Contract --> Preparse
+    Agent_Generic --> Preparse
+
+    Preparse --> Chunking[Chunking / Sectioning\n(paragraph/section/clause, overlap)]
+    Chunking --> Index[Index/Store chunks -> Vector DB]
+    Index --> Retriever[Retriever (BM25 optional -> Vector DB -> top-k)]
+
+    Retriever --> Assemble[Assemble Prompt Context\n(top-k passages + hints + prompt template)]
+    Assemble --> LLM[LLM Extractor\n(structured prompt -> JSON Schema)]
+    LLM --> Parse[Parse JSON -> Schema Validation]
+    Parse --> Provenance[Attach provenance (chunk_ids/snippets)]
+    Provenance --> Verifier[Verifier & Rules Engine\n(regex checks, second-model verify, vote)]
+    Verifier --> PostProc[Post-processor\n(normalize, calculate confidence)]
+  end
+
+  subgraph Persistence_Metrics [Persistence & Infra]
+    PostProc --> DB[(Relational DB)\n`documents, chunks, extractions`]
+    Index --> VectorDB[(Vector DB)\nFAISS / Milvus / Pinecone]
+    Worker[Task Queue / Workers\n(Celery / RQ)] --> LLM
+    Worker --> VectorDB
+    Worker --> DB
+    DB --> Backups[(Backups & Audit Logs)]
+    Worker --> Metrics[Metrics / Tracing\n(Prometheus / Grafana)]
+    Metrics --> Alerting[Alerting / SLA]
+  end
+
+  %% orchestration connections
+  Ingest --> Worker
+  Router --> Worker
+  Worker --> Agent_Bank
+  Worker --> Agent_Contract
+  Worker --> Agent_Generic
+
+  classDef infra fill:#eef,stroke:#333,stroke-width:1px;
+  class VectorDB,DB,Worker,Metrics,Backups,Alerting infra;

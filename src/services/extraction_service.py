@@ -1,6 +1,6 @@
 from openai import AsyncOpenAI
 from src.core.config import settings
-from src.schemas.bank_statement import StatementExtraction
+from src.schemas.bank_statement import StatementExtraction, StatementExtractionList
 
 
 class ExtractionService:
@@ -10,13 +10,14 @@ class ExtractionService:
 
         )
     # async def extract_data_with_Gemini/Claude(self, text: str) -> StatementExtraction:
-    async def extract_data(self, text: str) -> StatementExtraction:
+    async def extract_data(self, text: str) -> StatementExtractionList:
         prompt = f"""
 You are a financial data extraction assistant. Extract the following information from the provided text:
 - description: The description of the transaction. Be loyal to the original text and do not modify it.
 - amount: The amount of the transaction.Purely numeric value without currency symbols or commas.
 - transaction_date: The date of the transaction in YYYY-MM-DD format.
 
+The format is a List, so it should return List, each List contains the above information. If there is no information, please return null for that field. Be loyal to the original text and do not modify it.
 
 Text: {text}
 """
@@ -28,7 +29,7 @@ Text: {text}
                     "content": prompt
                 }
             ],
-            text_format=StatementExtraction,
+            text_format=StatementExtractionList,
             max_output_tokens=1000
         )
         return response.output_parsed
