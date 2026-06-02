@@ -25,9 +25,10 @@ class DoclingService:
         ocr_pipeline_options.do_ocr = False
         ocr_pipeline_options.do_table_structure = True
         ocr_pipeline_options.accelerator_options = AcceleratorOptions(
-            device=AcceleratorDevice.AUTO
+            device=AcceleratorDevice.AUTO,
+            num_threads=1
         )
-        #ocr_pipeline_options.layout_batch_size = 0.5
+        #ocr_pipeline_options.layout_batch_size = 1
 
 
         # self.converter_digital = DocumentConverter(
