@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from src.services.docling_service import DoclingService
 from src.services.extraction_service import ExtractionService
 from src.services.statement_service import StatementService
+from src.services.rag_service import RAGService
 from src.agents.router_agent import RouterAgent
 from src.agents.contract_agent import ExtractionService as ContractExtractionService
 from src.services.contract_service import ContractService
@@ -11,6 +12,7 @@ class StatementWorkflow:
     def __init__(self, db: Session):
         self.docling = DoclingService()
         self.router = RouterAgent()
+        self.rag = RAGService()
         self.extraction = ExtractionService()
         self.statement_service = StatementService(db)
         self.contract = ContractExtractionService()
@@ -36,10 +38,19 @@ class StatementWorkflow:
         #Ask for human check
         if form_type == "unknown":
             raise ValueError("Form type is unknown. Human review required.")
+        try:
+            rag_index = await self.rag.build_index(raw_text)
+            retrieved_context = await self.rag.retrieve(
+                rag_index,
+                self.rag.retrieval_query_for(form_type),
+            )
+        except Exception as exc:
+            logging.warning("RAG retrieval failed; falling back to full document text: %s", exc)
+            retrieved_context = raw_text
         #call for agents for different extraction tasks:
         if form_type == "bank_statement":
             records = []
-            extraction = await self.extraction.extract_data(raw_text)
+            extraction = await self.extraction.extract_data(raw_text, retrieved_context=retrieved_context)
             # extraction may be a wrapper model (StatementExtractionList) with .statements
             extraction_list = getattr(extraction, "statements", extraction)
             for extraction_item in extraction_list:
@@ -47,7 +58,7 @@ class StatementWorkflow:
                 records.append(rec)
             return records
         elif form_type == "athlete contract":
-            extraction = await self.contract.extract_data(raw_text)
+            extraction = await self.contract.extract_data(raw_text, retrieved_context=retrieved_context)
             # contract extractor may return AthleteContractExtractionList with .contracts
             extraction_list = getattr(extraction, "contracts", extraction)
             records = []

@@ -1,184 +1,204 @@
-# A Simple Document Intelligence System
+# Multi-Agent Document Intelligence System
 
-I built a bank parser platform beforehand, but it feels kinda outdated, so I learned from the Internet and combined what I've learned from class to build a document intelligent system, trying to build a more "Product-Ready" project.
+An applied document intelligence pipeline for converting uploaded documents into structured, schema-validated records. The system combines **FastAPI**, **Docling**, **OpenAI structured outputs**, a lightweight **RAG** layer, and **PostgreSQL** to classify documents, retrieve relevant context, extract fields, and persist results.
 
----
-
-## Overview
-
-This is a document intelligence pipeline built with **FastAPI**, **Docling**, **OpenAI structured outputs**, and **PostgreSQL**. The system accepts uploaded documents (PDF, DOCX, images, etc.), converts them to structured text, classifies the document type via an LLM-powered router, and dispatches to the appropriate extraction agent — all returning clean, schema-validated JSON persisted to a relational database.
-
-The core design idea: instead of hardcoding logic per document type, route first, then extract. This makes it easy to add new document types without touching existing extraction logic.
+This project started from a simpler bank-statement parser and was redesigned into a more extensible document intelligence system: parse first, route by document type, retrieve relevant sections, then extract through specialized agents.
 
 ---
 
-## Architecture
+## Why This Project
 
-```
-User Upload (POST /statements/upload)
-         │
-         ▼
-   DoclingService              ← converts raw bytes → Markdown text
-         │
-         ▼
-    RouterAgent                ← GPT-4o-mini classifies document type
-    (confidence gate)          ← rejects if confidence < 0.5
-         │
-    ┌────┴────────────────┐
-    ▼                     ▼
-BankStatement Agent   Contract Agent      (more agents extensible here)
-    │                     │
-    ▼                     ▼
-ExtractionService   ContractExtractionService
-(structured output   (structured output w/
- w/ JSON schema)      JSON schema)
-    │                     │
-    ▼                     ▼
-StatementService    ContractService
-(SQLAlchemy ORM)    (SQLAlchemy ORM)
-    │                     │
-    └────────┬────────────┘
-             ▼
-        PostgreSQL DB
-   (bank_statements / athlete_contracts)
+Many document extraction workflows fail because they either:
+
+- hardcode logic for one document format,
+- send entire long documents to an LLM without retrieval,
+- rely on fragile JSON/string parsing,
+- or return extracted values without validation or persistence.
+
+This project explores a more product-ready pattern:
+
+```text
+document ingestion -> LLM routing -> RAG retrieval -> structured extraction -> validation -> database persistence
 ```
 
-The full architecture diagram (including RAG, vector DB, task queue, and metrics layers) lives in [`docs/architecture.mmd`](docs/architecture.mmd).
+The current implementation supports bank statements and athlete contracts, but the architecture is designed so new document types can be added without rewriting the whole pipeline.
 
 ---
 
-## Key Design Decisions
+## Core Pipeline
 
-**1. Router-first pattern**
-A dedicated `RouterAgent` classifies the document before any extraction happens. It returns a `form_type` and a `confidence` score. If confidence falls below `0.5`, the pipeline refuses to process rather than silently hallucinating data. This is a deliberate design choice — fail loudly rather than return bad structured data.
-
-**2. OpenAI Structured Outputs (not prompt hacking)**
-Both extraction agents use `client.responses.parse()` with Pydantic models as `text_format`. This enforces JSON Schema at the API level, not via string parsing. No regex, no `json.loads()` error handling — the schema is guaranteed by the model.
-
-**3. Docling for document ingestion**
-[Docling](https://github.com/DS4SD/docling) handles multi-format document conversion (PDF, DOCX, images) to Markdown. It supports GPU acceleration via `AcceleratorDevice.AUTO` — if a CUDA-capable GPU is present, it uses it automatically (speeds up layout and table detection significantly).
-
-**4. Workflow orchestration**
-`StatementWorkflow` is a single class that wires together Docling → Router → Agent → Service. The API layer just calls `workflow.run_analysis_flow()` and gets back a list of ORM records. No business logic leaks into the API router.
-
-**5. Extensibility**
-New document types are added by:
-- Adding a new schema to `src/schemas/`
-- Adding a new agent to `src/agents/`
-- Adding a new service to `src/services/`
-- Adding a branch in `StatementWorkflow.run_analysis_flow()`
-- Registering the type string in `Valid_FORM_TYPES` in `config.py`
+```text
+User Upload
+    |
+    v
+FastAPI Endpoint
+    |
+    v
+DoclingService
+PDF/DOCX/image -> Markdown text
+    |
+    v
+RouterAgent
+LLM classifies document type and confidence
+    |
+    v
+RAGService
+chunking -> embeddings -> semantic retrieval
+    |
+    v
+Specialized Extraction Agent
+OpenAI structured outputs + Pydantic schema
+    |
+    v
+Service Layer
+transform and save records
+    |
+    v
+PostgreSQL
+```
 
 ---
 
-## Project Structure
+## Key Features
 
-```
-src/
-├── main.py                   # FastAPI app entry point, lifespan DB init
-├── core/
-│   └── config.py             # Pydantic Settings (env-based config)
-├── api/
-│   └── statement.py          # POST /statements/upload endpoint
-├── workflows/
-│   └── statement_workflow.py # Orchestration: Docling → Router → Agent → DB
-├── agents/
-│   ├── router_agent.py       # LLM document type classifier
-│   ├── contract_agent.py     # Athlete contract extraction agent
-│   └── document_agent.py     # (placeholder for future generic agent)
-├── services/
-│   ├── docling_service.py    # Docling document-to-Markdown converter
-│   ├── extraction_service.py # Bank statement extraction (structured output)
-│   ├── statement_service.py  # ORM layer for BankStatement
-│   └── contract_service.py   # ORM layer for AthleteContract
-├── models/
-│   ├── statement.py          # SQLAlchemy model: bank_statements table
-│   ├── athlete_contract.py   # SQLAlchemy model: athlete_contracts table
-│   └── user.py               # (placeholder)
-├── schemas/
-│   ├── bank_statement.py     # Pydantic schemas: extraction + response
-│   ├── athlete_contract.py   # Pydantic schemas: extraction + response
-│   ├── router.py             # RouterDeterminationResult schema
-│   └── user.py               # (placeholder)
-└── db/
-    ├── database.py           # SQLAlchemy engine + Base
-    └── session.py            # get_db dependency
-docs/
-├── architecture.mmd          # Full Mermaid architecture diagram
-└── ARCHITECTURE.md           # Diagram export instructions
-```
+- **Multi-format document ingestion**: Uses Docling to convert PDFs, DOCX files, spreadsheets, slides, and images into Markdown-like text.
+- **LLM router agent**: Classifies the document type before extraction and rejects low-confidence routing decisions.
+- **Lightweight RAG layer**: Chunks parsed text, creates OpenAI embeddings, retrieves relevant chunks with cosine similarity, and passes retrieved context to extraction agents.
+- **Structured LLM extraction**: Uses OpenAI structured outputs with Pydantic models rather than ad hoc JSON parsing.
+- **Validation-first design**: Pydantic schemas enforce field structure; router confidence gates avoid silently extracting from uncertain documents.
+- **Database persistence**: Stores extracted bank statement and contract records using SQLAlchemy and PostgreSQL.
+- **Extensible agent pattern**: New document types can be added through new schemas, agents, services, and workflow branches.
+
+---
+
+## How RAG Is Implemented
+
+The RAG layer is intentionally lightweight and in-memory, designed for a single uploaded document at a time.
+
+1. **Chunking**
+   - The parsed Markdown text is split by paragraphs.
+   - Chunks are kept around `1800` characters.
+   - Long paragraphs are split directly.
+   - Overlap is used to reduce boundary loss when important facts sit near chunk edges.
+
+2. **Embedding**
+   - Each chunk is embedded with `text-embedding-3-small`.
+   - The query for retrieval is also embedded.
+
+3. **Task-specific retrieval**
+   - The retrieval query changes by document type.
+   - For bank statements, the query focuses on transaction descriptions, dates, debits, credits, and amounts.
+   - For contracts, the query focuses on parties, dates, terms, compensation, value, and currency.
+
+4. **Extraction over retrieved context**
+   - Extraction agents receive retrieved chunks instead of the whole document.
+   - This reduces noisy context, lowers token cost, and makes the output easier to trace back to source text.
+
+This is a prototype RAG layer rather than a full production vector database. The next architecture step would be persistent vector storage, page/section metadata, source citations, and retrieval evaluation metrics.
 
 ---
 
 ## Supported Document Types
 
-| Type | `form_type` value | Extracted Fields |
+| Document type | Router value | Extracted fields |
 |---|---|---|
-| Bank Statement | `bank_statement` | `description`, `amount`, `transaction_date` |
-| Athlete Contract | `athlete contract` | `contract_name`, `party_a`, `party_b`, `effective_date`, `expiration_date`, `contract_value`, `currency` |
+| Bank statement | `bank_statement` | `description`, `amount`, `transaction_date` |
+| Athlete contract | `athlete contract` | `contract_name`, `party_a`, `party_b`, `effective_date`, `expiration_date`, `contract_value`, `currency` |
 
-Configured in `config.py` under `Valid_FORM_TYPES`. The router also handles `transfer agreement` and `Sponsorship & endorsement contract` — agents for those are the next step.
-
----
-
-## Supported Input Formats
-
-`.pdf` · `.docx` · `.xlsx` · `.pptx` · `.png` · `.jpg`
+The configuration also reserves router labels for future document types such as transfer agreements and sponsorship/endorsement contracts.
 
 ---
 
-## Installation
+## Project Structure
+
+```text
+src/
+├── main.py
+├── api/
+│   └── statement.py
+├── agents/
+│   ├── router_agent.py
+│   ├── contract_agent.py
+│   └── document_agent.py
+├── services/
+│   ├── docling_service.py
+│   ├── rag_service.py
+│   ├── extraction_service.py
+│   ├── statement_service.py
+│   └── contract_service.py
+├── workflows/
+│   └── statement_workflow.py
+├── schemas/
+│   ├── router.py
+│   ├── bank_statement.py
+│   └── athlete_contract.py
+├── models/
+│   ├── statement.py
+│   └── athlete_contract.py
+└── db/
+    ├── database.py
+    └── session.py
+```
+
+---
+
+## Tech Stack
+
+| Layer | Tools |
+|---|---|
+| API | FastAPI, Uvicorn |
+| Document parsing | Docling |
+| LLM routing/extraction | OpenAI API, structured outputs |
+| RAG | OpenAI embeddings, in-memory vector index, cosine similarity |
+| Validation | Pydantic |
+| Persistence | SQLAlchemy, PostgreSQL |
+| Configuration | pydantic-settings, `.env` |
+
+---
+
+## Setup
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-If you have an NVIDIA GPU (recommended for Docling's layout/table detection):
-
-```bash
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-```
-
----
-
-## Configuration
-
-Create a `.env` file in the project root:
+Create a `.env` file:
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost:5432/docdb
-OPENAI_API_KEY=sk-...
+OPENAI_API_KEY=your_openai_api_key
 ```
 
----
-
-## Running the Server
+Run the API:
 
 ```bash
 uvicorn src.main:app --reload
 ```
 
-The app auto-creates database tables on startup via `Base.metadata.create_all()`.
+Open the interactive docs:
 
-API docs available at `http://localhost:8000/docs`.
+```text
+http://localhost:8000/docs
+```
 
 ---
 
-## API
+## API Example
 
 ### `POST /statements/upload`
 
-Upload a document for classification and extraction.
+Upload a document using `multipart/form-data` with a `file` field.
 
-**Request:** `multipart/form-data` with a `file` field.
+Example bank statement response:
 
-**Response (bank statement):**
 ```json
 {
   "statements": [
     {
       "id": 1,
-      "filename": "chase_jan2024.pdf",
+      "filename": "statement.pdf",
       "description": "AMAZON MARKETPLACE",
       "amount": 49.99,
       "transaction_date": "2024-01-15",
@@ -188,13 +208,14 @@ Upload a document for classification and extraction.
 }
 ```
 
-**Response (athlete contract):**
+Example contract response:
+
 ```json
 {
   "contracts": [
     {
       "contract_id": 1,
-      "filename": "nike_deal.pdf",
+      "filename": "contract.pdf",
       "contract_name": "Sponsorship Agreement",
       "party_a": "Nike Inc.",
       "party_b": "John Smith",
@@ -210,26 +231,21 @@ Upload a document for classification and extraction.
 
 ---
 
-## Tech Stack
+## Architecture Notes And Next Steps
 
-| Component | Technology |
-|---|---|
-| API Framework | FastAPI |
-| Document Parsing | Docling |
-| LLM / Extraction | OpenAI GPT-4o-mini (structured outputs) |
-| Data Validation | Pydantic v2 |
-| ORM | SQLAlchemy |
-| Database | PostgreSQL |
-| Config Management | pydantic-settings |
-| GPU Acceleration | PyTorch / CUDA (optional) |
+Useful next improvements:
+
+- Add a persistent vector database such as Chroma, pgvector, or FAISS for cross-document retrieval.
+- Store chunk metadata such as page number, section title, document ID, and source offsets.
+- Return source citations for each extracted field.
+- Add a small evaluation dataset with manually validated ground truth.
+- Compare full-document extraction vs. RAG-based extraction using field-level accuracy, missing-field rate, hallucination rate, and source-support checks.
+- Add a human review dashboard for low-confidence routing or extraction outputs.
+- Move long-running Docling/LLM jobs to a queue such as Celery, RQ, or FastAPI background tasks.
+- Add unit tests for chunking, retrieval ranking, schema validation, and workflow routing.
 
 ---
 
-## What's Next
+## Public Repository Note
 
-- [ ] Generic document agent for unsupported types
-- [ ] Extraction agents for `transfer agreement` and sponsorship contracts
-- [ ] Streamlit dashboard for browsing extracted records
-- [ ] Chunking + vector retrieval (RAG layer) for long documents
-- [ ] Confidence-based human review queue
-- [ ] Task queue (Celery/RQ) for async processing of large files
+Do not commit `.env` files, API keys, private documents, or real user/customer data. This repository is intended to show the architecture and implementation pattern, not private source documents.

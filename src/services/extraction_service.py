@@ -10,16 +10,18 @@ class ExtractionService:
 
         )
     # async def extract_data_with_Gemini/Claude(self, text: str) -> StatementExtraction:
-    async def extract_data(self, text: str) -> StatementExtractionList:
+    async def extract_data(self, text: str, retrieved_context: str | None = None) -> StatementExtractionList:
+        extraction_text = retrieved_context or text
         prompt = f"""
 You are a financial data extraction assistant. Extract the following information from the provided text:
 - description: The description of the transaction. Be loyal to the original text and do not modify it.
 - amount: The amount of the transaction.Purely numeric value without currency symbols or commas.
 - transaction_date: The date of the transaction in YYYY-MM-DD format.
 
+The text below is retrieved context from the source document. Extract only facts supported by this context.
 The format is a List, so it should return List, each List contains the above information. If there is no information, please return null for that field. Be loyal to the original text and do not modify it.
 
-Text: {text}
+Text: {extraction_text}
 """
         response = await self.client.responses.parse(
             model="gpt-4o-mini",
