@@ -1,47 +1,48 @@
-flowchart LR
-  %% Combined framework diagram: Ingest -> Router -> Agents -> RAG -> LLM -> Verify -> Persist + Infra
-  subgraph API_Ingest [API / Ingest]
-    A[User Upload API\n`/statements/upload`]\nA --> Ingest[Ingest Service\n(file validation, metadata)]
+flowchart TB
+  subgraph ACCESS[1. Identity and intake boundary]
+    direction TB
+    U[Client or source connector] --> AUTH[Entra token validation<br/>workspace membership + role]
+    AUTH --> API[FastAPI intake]
+    API --> ACCEPT[202 Accepted<br/>job ID]
   end
 
-  subgraph RouterBlock [Router / Agent Selection]
-    Ingest --> Router{Router / Classifier}\n    Router -->|bank_statement| Agent_Bank[Agent: BankStatement]\n    Router -->|contract| Agent_Contract[Agent: Contract]\n    Router -->|other| Agent_Generic[Agent: Generic]
+  subgraph CONTROL[2. Durable ingestion control plane]
+    direction TB
+    API --> SRC[(Private content-addressed<br/>source store)]
+    API --> JOB[(PostgreSQL<br/>ingestion jobs)]
+    SRC --> W[Independent worker]
+    JOB -->|lease claim| W
+    W -. stage heartbeat .-> JOB
+    JOB -. retry + backoff .-> W
   end
 
-  subgraph Agent_Workflow [Per-Agent Workflow]
-    Agent_Bank --> Preparse[Deterministic Pre-parsers\n(regex date/amount/etc.)]
-    Agent_Contract --> Preparse
-    Agent_Generic --> Preparse
-
-    Preparse --> Chunking[Chunking / Sectioning\n(paragraph/section/clause, overlap)]
-    Chunking --> Index[Index/Store chunks -> Vector DB]
-    Index --> Retriever[Retriever (BM25 optional -> Vector DB -> top-k)]
-
-    Retriever --> Assemble[Assemble Prompt Context\n(top-k passages + hints + prompt template)]
-    Assemble --> LLM[LLM Extractor\n(structured prompt -> JSON Schema)]
-    LLM --> Parse[Parse JSON -> Schema Validation]
-    Parse --> Provenance[Attach provenance (chunk_ids/snippets)]
-    Provenance --> Verifier[Verifier & Rules Engine\n(regex checks, second-model verify, vote)]
-    Verifier --> PostProc[Post-processor\n(normalize, calculate confidence)]
+  subgraph DATA[3. AI data plane]
+    direction TB
+    W --> PARSE[Docling parsing]
+    PARSE --> ROUTE[LLM router<br/>confidence gate]
+    ROUTE --> CHUNK[Chunks<br/>offsets + hashes]
+    CHUNK --> RAG[Embedding retrieval]
+    RAG --> CTX[Budgeted context<br/>evidence IDs]
+    CTX --> AI[Structured extraction]
+    AI --> VALID[Pydantic +<br/>business validation]
   end
 
-  subgraph Persistence_Metrics [Persistence & Infra]
-    PostProc --> DB[(Relational DB)\n`documents, chunks, extractions`]
-    Index --> VectorDB[(Vector DB)\nFAISS / Milvus / Pinecone]
-    Worker[Task Queue / Workers\n(Celery / RQ)] --> LLM
-    Worker --> VectorDB
-    Worker --> DB
-    DB --> Backups[(Backups & Audit Logs)]
-    Worker --> Metrics[Metrics / Tracing\n(Prometheus / Grafana)]
-    Metrics --> Alerting[Alerting / SLA]
+  subgraph GOVERN[4. Publication, human control, and evidence]
+    direction TB
+    VALID --> TX[Transactional publication]
+    TX --> DB[(Documents + chunks<br/>business records)]
+    TX --> REVIEW[Needs-review queue]
+    REVIEW -->|allowlisted corrections| DECIDE[Authorized reviewer<br/>versioned approve or reject]
+    DECIDE --> DB
+    DECIDE --> AUDIT[(Actor + role<br/>before/after audit)]
+    DB --> EVAL[Regression and pilot quality gates<br/>release evidence]
   end
 
-  %% orchestration connections
-  Ingest --> Worker
-  Router --> Worker
-  Worker --> Agent_Bank
-  Worker --> Agent_Contract
-  Worker --> Agent_Generic
-
-  classDef infra fill:#eef,stroke:#333,stroke-width:1px;
-  class VectorDB,DB,Worker,Metrics,Backups,Alerting infra;
+  classDef boundary fill:#eaf3ff,stroke:#1769aa,color:#10233a,stroke-width:2px;
+  classDef control fill:#fff4df,stroke:#b66a00,color:#392400,stroke-width:2px;
+  classDef ai fill:#edf8f0,stroke:#26834a,color:#12301d,stroke-width:2px;
+  classDef govern fill:#f4efff,stroke:#6b4bb5,color:#24173d,stroke-width:2px;
+  class U,AUTH,API,ACCEPT boundary;
+  class SRC,JOB,W control;
+  class PARSE,ROUTE,CHUNK,RAG,CTX,AI,VALID ai;
+  class TX,DB,REVIEW,DECIDE,AUDIT,EVAL govern;

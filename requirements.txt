@@ -8,3 +8,8 @@ python-multipart
 pydantic-settings
 streamlit
 httpx
+pytest
+alembic
+PyJWT[crypto]
+azure-identity
+azure-storage-blob

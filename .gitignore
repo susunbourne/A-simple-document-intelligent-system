@@ -4,6 +4,7 @@ __pycache__/
 *.pyo
 *.pyd
 output.md
+.dist/
 
 # Local documents, uploads, and generated artifacts
 input/

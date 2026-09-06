@@ -1,14 +1,17 @@
 from docling.datamodel.base_models import InputFormat, DocumentStream
-from docling.datamodel.pipeline_options import LayoutOptions, PdfPipelineOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.pipeline.simple_pipeline import SimplePipeline
-from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption, WordFormatOption
-from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
-import tempfile
-import os
+from docling.document_converter import WordFormatOption
+import logging
 import torch
 from io import BytesIO
+
+from src.core.logging import log_event, privacy_safe_file_id
+
+
+logger = logging.getLogger(__name__)
 
 
 class DoclingService:
@@ -53,16 +56,18 @@ class DoclingService:
             }
         )
 
-    def convert_document(self, file_bytes: bytes, filename: str) -> str:
+    def convert_document(self, file_bytes: bytes, filename: str, request_id: str | None = None) -> str:
         buf = BytesIO(file_bytes)
         source = DocumentStream(name=filename, stream=buf)
         result = self.converter_scanned.convert(source)
         markdown = result.document.export_to_markdown()
-        print("======This is the markdown output======")
-        print(markdown)
-        print("======================================")
-        with open("output.md", "w", encoding = "utf-8") as f:
-            f.write(markdown)
+        log_event(
+            logger,
+            "document_parsed",
+            request_id=request_id,
+            file_id=privacy_safe_file_id(filename),
+            extracted_chars=len(markdown),
+        )
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 

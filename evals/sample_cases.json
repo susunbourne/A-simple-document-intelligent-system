@@ -1,0 +1,63 @@
+[
+  {
+    "sample_id": "bank_statement_001",
+    "document_type": "bank_statement",
+    "source_text": "Account statement. Transactions: 2026-01-15 AMAZON MARKETPLACE debit 49.99. 2026-01-18 PAYROLL deposit 1250.00.",
+    "expected": {
+      "statements": [
+        {
+          "description": "AMAZON MARKETPLACE",
+          "amount": 49.99,
+          "transaction_date": "2026-01-15"
+        },
+        {
+          "description": "PAYROLL",
+          "amount": 1250.0,
+          "transaction_date": "2026-01-18"
+        }
+      ]
+    },
+    "expected_status": "completed"
+    ,
+    "expected_evidence_terms": [
+      "AMAZON MARKETPLACE",
+      "PAYROLL",
+      "2026-01-15",
+      "1250.00"
+    ]
+  },
+  {
+    "sample_id": "athlete_contract_001",
+    "document_type": "athlete_contract",
+    "source_text": "Name, Image and Likeness Agreement between Blue Brand LLC and Jordan Smith. Effective date: 2026-02-01. Expiration date: 2026-08-01. Total compensation: USD 5000.",
+    "expected": {
+      "contracts": [
+        {
+          "contract_name": "Name, Image and Likeness Agreement",
+          "party_a": "Blue Brand LLC",
+          "party_b": "Jordan Smith",
+          "effective_date": "2026-02-01",
+          "expiration_date": "2026-08-01",
+          "contract_value": 5000.0,
+          "currency": "USD"
+        }
+      ]
+    },
+    "expected_status": "completed"
+    ,
+    "expected_evidence_terms": [
+      "Blue Brand LLC",
+      "Jordan Smith",
+      "Effective date: 2026-02-01",
+      "Total compensation: USD 5000"
+    ]
+  },
+  {
+    "sample_id": "unsupported_001",
+    "document_type": "unknown",
+    "source_text": "This is a lunch menu with sandwiches, salads, and beverages.",
+    "expected": {},
+    "expected_status": "rejected",
+    "expected_evidence_terms": []
+  }
+]

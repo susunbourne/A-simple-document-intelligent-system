@@ -1,0 +1,14 @@
+{
+  "generated_at": "2026-09-06T04:42:25.079117+00:00",
+  "database": "sqlite_in_memory",
+  "synthetic": true,
+  "includes_file_parsing": false,
+  "includes_model_calls": false,
+  "job_count": 1000,
+  "enqueued": 1000,
+  "claimed": 1000,
+  "enqueue_seconds": 0.9816,
+  "enqueue_jobs_per_second": 1018.69,
+  "claim_terminal_seconds": 3.2757,
+  "claim_terminal_jobs_per_second": 305.28
+}
