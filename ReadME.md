@@ -11,6 +11,7 @@ The project models the data-layer work of a Forward-Deployed Engineer: understan
 ## Explore The System
 
 - **[Public workflow walkthrough](https://document-intelligence-playground-jsu.sujy040913.chatgpt.site/):** a curated, no-customer-data walkthrough of the operator experience.
+- **[System and workflow showcase](docs/PORTFOLIO_SHOWCASE.md):** layer-by-layer architecture, both core workflows, technical skills, Azure boundaries, and evidence-based readiness limits.
 - **[Architecture and data flow](docs/ARCHITECTURE.md):** the full request, data, and control-plane diagram.
 - **[Production review](docs/PRODUCTION_REVIEW.md):** implemented controls, evidence gaps, assumptions, and next production gates.
 - **[Portfolio case study](docs/PORTFOLIO_CASE_STUDY.md):** customer problem to technical decisions and verification evidence.
